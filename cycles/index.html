@@ -1,0 +1,194 @@
+<html>
+ <head>
+  <style>
+    body {
+      font-family: arial, helvetica, sans-serif;
+    }
+    .title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    p.graphics {
+      text-align: center;
+    }
+    p {
+      width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+  <script>
+    function angleDelta( a, b )
+    {
+      var d = b - a;
+      if (d > Math.PI)
+        d -= Math.PI*2;
+      if (d < -Math.PI)
+        d += Math.PI*2;
+      return d;
+    }
+    var D2R = Math.PI / 180;
+    var t = 0.6;
+    var rings =
+      {
+        radii: [ 1, 2, 3, 4 ],
+        speeds: [ 2, 3, 4, 12 ],
+        colors: [ "blue", "green", "orange", "red"]
+      };
+    var opts =
+      {
+        gap: 40 * D2R,
+        rScale: 40,
+        tScale: 0.10,
+        lineWidth: 5,
+        centerMsg: { text: "I", color: "black", font: "bold 28px arial" },
+        sideMsg: { text: "i", color: "#808080", font: "bold 28px arial" },
+        sideR: 5,
+        openColor: "#c0c0c0",
+        rayColor: "#f0ee89",
+        rayAlpha: 0.1
+      };
+    var tPrev = 0, xDeep = -1;
+    function draw( rings, opts )
+    {
+      var c = $("canvas");
+      if (! c.length)
+        return;
+      var g = c[0].getContext('2d');
+      var t0 = new Date().getTime();
+      var dt = tPrev ? t0 - tPrev : 0;
+      tPrev = t0;
+      t += opts.tScale * dt/1000;
+      g.fillStyle = "rgba(0,0,0,0)";
+      g.fillStyle = "white";
+      g.fillRect( 0, 0, c[0].width, c[0].height );
+      var cx = c[0].width/2;
+      var cy = c[0].height/2;
+      var openLevel = [];
+      var ray0, ray1, visible=true;
+      for (var nR=0; nR < rings.radii.length; nR++)
+      {
+        var theta = (t * rings.speeds[nR]) % (Math.PI*2);
+        var a0 = theta + opts.gap/2;
+        var a1 = theta + Math.PI*2 - opts.gap/2;
+        var open = theta;
+        if (open > Math.PI)
+          open = Math.PI*2 - open;
+        open /= (opts.gap/2);
+        open = 1 - open;
+        openLevel[nR] = open;
+        g.lineWidth = opts.lineWidth;
+        g.lineCap = "round";
+        g.strokeStyle = rings.colors[nR];
+        g.beginPath();
+        g.arc( cx, cy, rings.radii[nR] * opts.rScale, a0, a1, false );
+        g.stroke();
+        
+        if (visible)
+        {
+          if (nR == 0)
+          {
+            ray1 = a1;
+            ray0 = a0;
+          }
+          else
+          {
+            var d10 = angleDelta( ray1, ray0 );
+            if (angleDelta( ray0, a1 ) < 0  &&  angleDelta( ray1, a0 ) > 0)
+            {
+              if (angleDelta( ray1, a1 ) < d10  &&  angleDelta( ray1, a1 ) >= 0)
+                ray1 = a1;
+              if (angleDelta( ray1, a0 ) < d10)
+                ray0 = a0;
+            }
+            else
+              visible = false;
+          }
+          if (visible)
+          {
+            var r = ((nR == rings.radii.length-1) ? (opts.sideR + 0.5) : rings.radii[nR+1]) * opts.rScale;
+            g.fillStyle = opts.rayColor;
+            g.globalAlpha = opts.rayAlpha;
+            g.beginPath();
+            g.moveTo( cx, cy );
+            g.lineTo( cx + Math.cos(ray0) * r, cy + Math.sin(ray0) * r );
+            g.lineTo( cx + Math.cos(ray1) * r, cy + Math.sin(ray1) * r );
+            g.closePath();
+            g.fill();
+            g.globalAlpha = 1;
+          }
+        }
+        if (open > 0)
+        {
+          g.lineWidth = 1;
+          g.strokeStyle = opts.openColor;
+          g.strokeStyle = rings.colors[nR];
+          g.beginPath();
+          var rOpen = Math.sin(opts.gap/2) * rings.radii[nR] * open;
+          g.save();
+          var px = cx + rings.radii[nR] * opts.rScale;
+          var py = cy;
+          g.translate( px, py );
+          g.scale( 0.3, 1 );
+          g.arc( 0, 0, rOpen * opts.rScale, 0, Math.PI*2, true );
+          g.stroke();
+          g.restore();
+        }
+      }
+      // how far can we see in?
+      var deepest = rings.radii.length;
+      while (deepest > 0  &&  openLevel[deepest-1] > 0)
+        deepest --;
+      g.beginPath();
+      g.moveTo( cx + opts.sideR * opts.rScale, cy );
+      var x0 = cx + (deepest ? rings.radii[deepest-1] : 0) * opts.rScale + opts.lineWidth/2;
+      if (xDeep == -1)
+        xDeep = x0;
+      var vv = Math.pow(0.01,dt/1000);
+      var xD = xDeep * vv + (x0 * (1-vv));
+      xDeep = xD;
+      g.lineTo( xD, cy );
+      g.moveTo( xD, cy );
+      g.lineTo( xD + 10, cy + 10 );
+      g.moveTo( xD, cy );
+      g.lineTo( xD + 10, cy - 10 );
+      g.lineWidth = 3;
+      g.strokeStyle = "yellow";
+      g.stroke();
+      
+      // letters
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.font = opts.centerMsg.font;
+      g.fillStyle = opts.centerMsg.color;
+      g.fillText( opts.centerMsg.text, cx, cy );
+      g.font = opts.sideMsg.font;
+      g.fillStyle = opts.sideMsg.color;
+      g.fillText( opts.sideMsg.text, cx + opts.sideR * opts.rScale, cy );
+    }
+    function loop()
+    {
+      draw( rings, opts );
+      setTimeout( loop, 10 );
+    }
+    loop();
+  </script>
+ </head>
+ <body>
+  <div class='title'>
+    Cycles and Insight
+  </div>
+  <p class='graphics'>
+    <canvas width="600" height="350"></canvas>
+  </p>
+  <p>
+    <em>
+      Fairly often, I feel I can look inward with a little bit of clarity and get small insights.
+      Then, every once in a while I can see a little deeper; the insights are bigger, and the
+      consequent changes in my life greater from what I learn.
+    </em>
+  </p>
+ </body>
+</html>
